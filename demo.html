@@ -441,6 +441,69 @@
                     <div id="network-status-result" class="result-box" style="display:none;"></div>
                 </div>
             </div>
+
+            <!-- Module 7: Fight Detection (AI Security) -->
+            <div class="module-card" style="border-left: 4px solid #e74c3c;">
+                <div class="module-header">
+                    <span class="success-indicator"></span>
+                    🆕 Module 7: Fight Detection & Auto-Dispatch
+                </div>
+                <div class="module-content">
+                    <label>Crowd Density (0-100):</label>
+                    <input type="number" id="crowdDensity" value="85" min="0" max="100">
+                    
+                    <label>Movement Anomalies (0-100):</label>
+                    <input type="number" id="movementAnomalies" value="72" min="0" max="100">
+                    
+                    <label>Audio Analysis (0-100):</label>
+                    <input type="number" id="audioAnalysis" value="65" min="0" max="100">
+                    
+                    <label>Reports Count:</label>
+                    <input type="number" id="reportsCount" value="3" min="0">
+                    
+                    <button class="test-button" onclick="testFightDetect()" style="background: #e74c3c;">Detect Fight</button>
+                    <div id="fight-detect-result" class="result-box" style="display:none;"></div>
+                    
+                    <button class="test-button" onclick="testFightStatus()" style="background: #c0392b; margin-top: 10px;">Active Incidents</button>
+                    <div id="fight-status-result" class="result-box" style="display:none;"></div>
+                    
+                    <button class="test-button" onclick="testSecurityStatus()" style="background: #d35400; margin-top: 10px;">Security Teams</button>
+                    <div id="security-status-result" class="result-box" style="display:none;"></div>
+                </div>
+            </div>
+
+            <!-- Module 8: Emergency Call Analysis (Voice Stress) -->
+            <div class="module-card" style="border-left: 4px solid #f39c12;">
+                <div class="module-header">
+                    <span class="success-indicator"></span>
+                    🆕 Module 8: Emergency Call Analysis (Voice Stress)
+                </div>
+                <div class="module-content">
+                    <label>Caller Transcription:</label>
+                    <textarea id="callTranscription" placeholder="What caller is saying...">Help! There is a fight happening here. People are fighting. Please send help immediately!</textarea>
+                    
+                    <label>Pitch (Hz):</label>
+                    <input type="number" id="callPitch" value="180">
+                    
+                    <label>Speech Rate (words/sec):</label>
+                    <input type="number" id="callSpeechRate" value="2.5" step="0.1">
+                    
+                    <label>Call Duration (seconds):</label>
+                    <input type="number" id="callDuration" value="45">
+                    
+                    <label>Location:</label>
+                    <input type="text" id="callLocation" value="Downtown Main Street">
+                    
+                    <button class="test-button" onclick="testCallAnalyze()" style="background: #f39c12;">Analyze Call</button>
+                    <div id="call-analyze-result" class="result-box" style="display:none;"></div>
+                    
+                    <button class="test-button" onclick="testCallHistory()" style="background: #e67e22; margin-top: 10px;">Call History</button>
+                    <div id="call-history-result" class="result-box" style="display:none;"></div>
+                    
+                    <button class="test-button" onclick="testCallStats()" style="background: #d35400; margin-top: 10px;">Call Statistics</button>
+                    <div id="call-stats-result" class="result-box" style="display:none;"></div>
+                </div>
+            </div>
         </div>
 
         <!-- Languages & Info -->
@@ -450,7 +513,7 @@
                 All Endpoints & Supported Languages
             </div>
             <div class="module-content">
-                <h3>API Endpoints (23 Total):</h3>
+                <h3>API Endpoints (30 Total):</h3>
                 <ul class="endpoint-list">
                     <li><code>GET</code> /health - System health</li>
                     <li><code>GET</code> /demo/info - Platform info</li>
@@ -461,11 +524,18 @@
                     <li><code>POST</code> /auth/register - Register user</li>
                     <li><code>POST</code> /network/verify - Verify node</li>
                     <li><code>GET</code> /audit/logs - View audit logs</li>
-                    <li>... and 14 more endpoints</li>
+                    <li style="color: #e74c3c; font-weight: bold;"><code>POST</code> /fight/detect - Detect crowd fight ⭐NEW</li>
+                    <li style="color: #e74c3c; font-weight: bold;"><code>GET</code> /fight/status - Active incidents ⭐NEW</li>
+                    <li style="color: #f39c12; font-weight: bold;"><code>POST</code> /call/analyze - Analyze emergency call ⭐NEW</li>
+                    <li style="color: #f39c12; font-weight: bold;"><code>GET</code> /call/history - Call history ⭐NEW</li>
+                    <li>... and 16 more endpoints</li>
                 </ul>
 
                 <button class="test-button" onclick="testLanguages()" style="background: #2196f3;">Load All Languages</button>
                 <div id="languages-result" class="result-box" style="display:none;"></div>
+
+                <button class="test-button" onclick="testTollfree()" style="background: #27ae60; margin-top: 10px;">Toll-Free Number</button>
+                <div id="tollfree-result" class="result-box" style="display:none;"></div>
 
                 <button class="test-button" onclick="testPlatformInfo()" style="background: #ff9800; margin-top: 10px;">Platform Information</button>
                 <div id="platform-result" class="result-box" style="display:none;"></div>
@@ -475,7 +545,7 @@
         <!-- Footer -->
         <footer>
             <p>✅ CROWD ASSISTANCE - Fully Operational Emergency Response Platform</p>
-            <p>🌍 150+ Languages | 🔒 Enterprise Security | ⚡ Production Grade</p>
+            <p>🌍 150+ Languages | 🔒 Enterprise Security | ⚡ Production Grade | 🆕 AI Security Features</p>
             <p style="margin-top: 20px; font-size: 0.9em;">🔗 GitHub: https://github.com/loghithakshan/PROJECT</p>
         </footer>
     </div>
@@ -641,6 +711,101 @@
                 displayResult('platform-result', result.data, true);
             } else {
                 displayResult('platform-result', `Error: ${result.error}`, false);
+            }
+        }
+
+        // NEW: Fight Detection Functions
+        async function testFightDetect() {
+            const crowdDensity = parseInt(document.getElementById('crowdDensity').value);
+            const movementAnomalies = parseInt(document.getElementById('movementAnomalies').value);
+            const audioAnalysis = parseInt(document.getElementById('audioAnalysis').value);
+            const reportsCount = parseInt(document.getElementById('reportsCount').value);
+
+            const result = await makeRequest('/fight/detect', 'POST', {
+                crowdDensity,
+                movementAnomalies,
+                audioAnalysis,
+                reportsCount
+            });
+
+            if (result.success) {
+                displayResult('fight-detect-result', result.data, true);
+            } else {
+                displayResult('fight-detect-result', `Error: ${result.error}`, false);
+            }
+        }
+
+        async function testFightStatus() {
+            const result = await makeRequest('/fight/status');
+            if (result.success) {
+                displayResult('fight-status-result', result.data, true);
+            } else {
+                displayResult('fight-status-result', `Error: ${result.error}`, false);
+            }
+        }
+
+        async function testSecurityStatus() {
+            const result = await makeRequest('/fight/security-status');
+            if (result.success) {
+                displayResult('security-status-result', result.data, true);
+            } else {
+                displayResult('security-status-result', `Error: ${result.error}`, false);
+            }
+        }
+
+        // NEW: Emergency Call Analysis Functions
+        async function testCallAnalyze() {
+            const transcription = document.getElementById('callTranscription').value;
+            const pitch = parseInt(document.getElementById('callPitch').value);
+            const speechRate = parseFloat(document.getElementById('callSpeechRate').value);
+            const callDuration = parseInt(document.getElementById('callDuration').value);
+            const location = document.getElementById('callLocation').value;
+
+            const result = await makeRequest('/call/analyze', 'POST', {
+                callerId: 'caller_' + Date.now(),
+                transcription,
+                audioFeatures: {
+                    pitch,
+                    speechRate,
+                    voiceBreaks: 3,
+                    breathingPattern: 'irregular',
+                    pauseFrequency: 0.1
+                },
+                callDuration,
+                location
+            });
+
+            if (result.success) {
+                displayResult('call-analyze-result', result.data, true);
+            } else {
+                displayResult('call-analyze-result', `Error: ${result.error}`, false);
+            }
+        }
+
+        async function testCallHistory() {
+            const result = await makeRequest('/call/history?limit=10');
+            if (result.success) {
+                displayResult('call-history-result', result.data, true);
+            } else {
+                displayResult('call-history-result', `Error: ${result.error}`, false);
+            }
+        }
+
+        async function testCallStats() {
+            const result = await makeRequest('/call/statistics');
+            if (result.success) {
+                displayResult('call-stats-result', result.data, true);
+            } else {
+                displayResult('call-stats-result', `Error: ${result.error}`, false);
+            }
+        }
+
+        async function testTollfree() {
+            const result = await makeRequest('/tollfree');
+            if (result.success) {
+                displayResult('tollfree-result', result.data, true);
+            } else {
+                displayResult('tollfree-result', `Error: ${result.error}`, false);
             }
         }
 

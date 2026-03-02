@@ -1,10 +1,18 @@
 // CROWD ASSISTANCE - Working Demo Server
-// Fully functional endpoints showing all 6 modules
+// Fully functional endpoints showing all 6 modules + CROWD FIGHT DETECTION & SMART CALL CENTER
 
 const express = require('express');
 const cors = require('cors');
 const app = express();
 const PORT = 3000;
+
+// Import new security modules
+const FightDetectionService = require('./fight-detection.service');
+const VoiceStressAnalyzer = require('./voice-stress-analyzer');
+
+// Initialize services
+const fightDetection = new FightDetectionService();
+const voiceAnalyzer = new VoiceStressAnalyzer();
 
 // Middleware
 app.use(cors());
@@ -24,6 +32,7 @@ const languages = {
 
 const alerts = [];
 const hazards = [];
+const tollfreeNumber = '+1-800-CROWD-911';
 
 // ✅ MODULE 1: HEALTH CHECK
 app.get('/health', (req, res) => {
@@ -275,6 +284,81 @@ app.get('/demo/info', (req, res) => {
   });
 });
 
+// =============== NEW: ADVANCED AI SECURITY MODULES ===============
+
+// FIGHT DETECTION ENDPOINTS
+app.post('/fight/detect', (req, res) => {
+  const { crowdDensity, movementAnomalies, audioAnalysis, reportsCount } = req.body;
+  const result = fightDetection.detectFight({
+    crowdDensity: crowdDensity || 85,
+    movementAnomalies: movementAnomalies || 72,
+    audioAnalysis: audioAnalysis || 65,
+    reportsCount: reportsCount || 3
+  });
+  res.json(result);
+});
+
+app.get('/fight/status', (req, res) => {
+  res.json({
+    activeIncidents: fightDetection.getActiveIncidents(),
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.get('/fight/security-status', (req, res) => {
+  res.json(fightDetection.getSecurityStatus());
+});
+
+app.put('/fight/incident/:incidentId', (req, res) => {
+  const { status } = req.body;
+  const result = fightDetection.updateIncidentStatus(req.params.incidentId, status);
+  res.json(result);
+});
+
+// EMERGENCY CALL ANALYSIS ENDPOINTS
+app.post('/call/analyze', (req, res) => {
+  const { callerId, transcription, audioFeatures, callDuration, location } = req.body;
+  const result = voiceAnalyzer.analyzeVoiceStress({
+    callerId: callerId || 'caller_' + Date.now(),
+    transcription: transcription || 'Help! There is a fight happening here. People are fighting. Please send help immediately!',
+    audioFeatures: audioFeatures || {
+      pitch: 180,
+      speechRate: 2.5,
+      voiceBreaks: 3,
+      breathingPattern: 'irregular',
+      pauseFrequency: 0.1
+    },
+    callDuration: callDuration || 45,
+    location: location || 'Downtown Main Street'
+  });
+  res.json(result);
+});
+
+app.get('/call/history', (req, res) => {
+  const limit = parseInt(req.query.limit) || 10;
+  res.json(voiceAnalyzer.getCallHistory(limit));
+});
+
+app.get('/call/statistics', (req, res) => {
+  res.json(voiceAnalyzer.getCallStatistics());
+});
+
+app.get('/tollfree', (req, res) => {
+  res.json({
+    number: tollfreeNumber,
+    description: 'CROWD ASSISTANCE 24/7 Emergency Hotline',
+    features: [
+      'Real-time voice stress analysis',
+      'Automatic emotion detection',
+      'Smart security dispatch',
+      'Multilingual support (150+ languages)',
+      'Priority routing based on risk level'
+    ],
+    responseTime: '< 2 minutes',
+    coverage: 'Global'
+  });
+});
+
 // Error handler
 app.use((req, res) => {
   res.status(404).json({ error: 'Endpoint not found', path: req.path });
@@ -286,11 +370,11 @@ app.listen(PORT, () => {
   console.log('║       🚀 CROWD ASSISTANCE - DEMO SERVER RUNNING 🚀       ║');
   console.log('╠════════════════════════════════════════════════════════════╣');
   console.log(`║  Server: http://localhost:${PORT}                         ║`);
-  console.log('║  Modules: 6/6 Active                                      ║');
+  console.log('║  Modules: 8/8 Active (6 Core + 2 AI Security)             ║');
   console.log('║  Languages: 150+                                          ║');
   console.log('║  Status: FULLY OPERATIONAL ✓                             ║');
   console.log('╚════════════════════════════════════════════════════════════╝');
-  console.log('\nEndpoints Available:');
+  console.log('\nCore Endpoints:');
   console.log('  ✓ GET  /health                  - System health');
   console.log('  ✓ GET  /demo/info               - Platform info');
   console.log('  ✓ GET  /translation/languages   - List 150+ languages');
@@ -299,6 +383,14 @@ app.listen(PORT, () => {
   console.log('  ✓ POST /alerts/broadcast        - Broadcast alert');
   console.log('  ✓ POST /auth/register           - Register user');
   console.log('  ✓ POST /network/verify          - Verify node');
+  console.log('\n🆕 AI SECURITY Endpoints:');
+  console.log('  ✓ POST /fight/detect            - Detect crowd fights (Auto-Dispatch)');
+  console.log('  ✓ GET  /fight/status            - Active incidents');
+  console.log('  ✓ GET  /fight/security-status   - Security teams status');
+  console.log('  ✓ POST /call/analyze            - Analyze emergency call (Voice Stress)');
+  console.log('  ✓ GET  /call/history            - Recent call history');
+  console.log('  ✓ GET  /call/statistics         - Call analysis stats');
+  console.log('  ✓ GET  /tollfree                - Emergency hotline info');
   console.log('  ✓ GET  /audit/logs              - View audit trail');
   console.log('\nTry: curl http://localhost:3000/health\n');
 });
