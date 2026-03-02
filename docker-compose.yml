@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 16 + TimescaleDB
+  postgres:
+    image: timescale/timescaledb:latest-pg16
+    container_name: resilient_echo_db
+    environment:
+      POSTGRES_DB: resilient_echo
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Redis (optional, for future session caching)
+  redis:
+    image: redis:7-alpine
+    container_name: resilient_echo_redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # pgAdmin (optional, for DB management UI)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: resilient_echo_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

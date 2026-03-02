@@ -1,0 +1,238 @@
+// This is a Prisma schema file.
+// Learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/**
+ * ===== USER MODEL =====
+ * Core identity + authentication + role-based access control
+ * 
+ * Features:
+ * - Argon2id password hashing
+ * - Ed25519 keypair for ZK proofs
+ * - Email verification
+ * - Multiple roles: user, responder, admin
+ * - Status tracking (active, banned, pending_verification)
+ * - Encrypted private key storage
+ */
+model User {
+  id                    String    @id @default(cuid())
+  email                 String    @unique @db.VarChar(255)
+  passwordHash          String    @db.Text // Argon2id hash
+  publicKey             String    @db.Text // Ed25519 public key (hex)
+  encryptedPrivateKey   String    @db.Text // XChaCha20-encrypted private key
+  
+  firstName             String?   @db.VarChar(100)
+  lastName              String?   @db.VarChar(100)
+  role                  UserRole  @default(USER)
+  status                UserStatus @default(PENDING_VERIFICATION)
+  
+  // Email verification
+  emailVerified         Boolean   @default(false)
+  verificationToken     String?   @unique @db.VarChar(255)
+  verificationSentAt    DateTime?
+  
+  // Geolocation (for alert radius queries)
+  latitude              Float?
+  longitude             Float?
+  lastLocationUpdate    DateTime?
+  
+  // Audit fields
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  lastLoginAt           DateTime?
+  deletedAt             DateTime? // Soft delete for GDPR compliance
+  
+  // Relations
+  sessions              Session[]
+  alerts                Alert[]
+  auditLogs             AuditEvent[]
+  
+  @@index([email])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+/**
+ * ===== SESSION MODEL =====
+ * Tracks active sessions + refresh tokens
+ * 
+ * Features:
+ * - Per-session token management
+ * - Automatic revocation support
+ * - Expiration tracking
+ */
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  token     String   @db.Text // Refresh token (JWT encoded)
+  expiresAt DateTime
+  revokedAt DateTime? // NULL = active, NOT NULL = revoked
+  
+  createdAt DateTime @default(now())
+  
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+/**
+ * ===== ALERT MODEL =====
+ * Emergency alerts broadcast to geofenced users
+ * 
+ * Features:
+ * - Geospatial indexing (PostGIS)
+ * - Severity levels (critical, high, medium, low)
+ * - Multilingual translations
+ * - ZK proof of authenticity
+ * - Blockchain audit trail
+ */
+model Alert {
+  id                String    @id @default(cuid())
+  userId            String    // Creator (responder or admin)
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  title             String    @db.VarChar(512)
+  description       String    @db.Text // Encrypted in transit
+  severity          AlertSeverity @default(MEDIUM)
+  alertType         AlertType
+  
+  // Geolocation
+  latitude          Float
+  longitude         Float
+  radiusKm          Float     @default(50.0) // Broadcast radius
+  polygon           String?   @db.Text // GeoJSON polygon (optional, for complex regions)
+  
+  // Content + encryption
+  encryptedContent  String?   @db.Text // XChaCha20 E2EE
+  languageList      String[]  @default([]) // ISO 639-1 codes: ["en", "es", "fr", ...]
+  
+  // Verification + authenticity
+  verified          Boolean   @default(false)
+  zkProofId         String?   // Links to ZKProof.id
+  blockchainTxId    String?   @unique // Hyperledger Fabric transaction ID
+  
+  // Delivery metrics
+  sentAt            DateTime  @default(now())
+  deliveredCount    Int       @default(0)
+  readCount         Int       @default(0)
+  
+  // Audit
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime?
+  
+  @@index([userId])
+  @@index([severity])
+  @@index([alertType])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@map("alerts")
+}
+
+/**
+ * ===== AUDIT EVENT MODEL =====
+ * Immutable log of all authentication events
+ * 
+ * Features:
+ * - Cryptographic hash chain
+ * - Blockchain archival (Hyperledger Fabric)
+ * - Filterable by type + user
+ * - GDPR forensics support
+ */
+model AuditEvent {
+  id                String    @id @default(cuid())
+  userId            String?
+  user              User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  eventType         String    @db.VarChar(100) // USER_REGISTERED, LOGIN_SUCCESS, TOKEN_ISSUED, etc.
+  details           Json      // Structured event data
+  dataHash          String    @db.VarChar(64) // SHA-256 hash for integrity
+  previousHash      String?   @db.VarChar(64) // Links to previous event (hash chain)
+  
+  blockchainTxId    String?   // Hyperledger Fabric transaction ID
+  blockchainHash    String?   @db.VarChar(64) // Blockchain data hash
+  
+  createdAt         DateTime  @default(now())
+  
+  @@index([userId])
+  @@index([eventType])
+  @@index([createdAt])
+  @@map("audit_events")
+}
+
+/**
+ * ===== ZK PROOF MODEL =====
+ * Stores zero-knowledge proof verification records
+ * 
+ * Circuits:
+ * - translate_fidelity: Prove translation quality without revealing content
+ * - proximity_proof: Prove user location within radius (privacy-preserving)
+ * - network_verification: Prove responder connectivity without topology exposure
+ */
+model ZKProof {
+  id                String    @id @default(cuid())
+  
+  circuitName       String    @db.VarChar(100) // translate_fidelity, proximity_proof, network_verification
+  inputHash         String    @db.VarChar(64) // Hash of public inputs
+  proofData         Json      // Groth16 proof data (serialized)
+  
+  verified          Boolean   @default(false)
+  verificationTimestamp DateTime? // When verified
+  
+  blockchainTxId    String?   // Hyperledger Fabric archival
+  blockchainHash    String?   @db.VarChar(64)
+  
+  createdAt         DateTime  @default(now())
+  
+  @@index([circuitName])
+  @@index([verified])
+  @@map("zk_proofs")
+}
+
+/**
+ * ===== ENUMS =====
+ */
+
+enum UserRole {
+  USER // Regular user (report hazards, receive alerts)
+  RESPONDER // Emergency responder (verified, use ZK)
+  ADMIN // Administrator
+}
+
+enum UserStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  SUSPENDED
+  BANNED
+}
+
+enum AlertSeverity {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum AlertType {
+  SEISMIC
+  WEATHER
+  FLOOD
+  WILDFIRE
+  VOLCANO
+  INDUSTRIAL
+  PANDEMIC
+  CIVIL_UNREST
+  OTHER
+}

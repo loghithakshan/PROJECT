@@ -1,0 +1,435 @@
+// Prisma Schema for ResilientEcho - Complete Domain Model
+// Embodies: Privacy-by-Design, Zero-Trust, Resilience, Decentralized Trust, Hazard Intelligence, Multilingual Urgency
+// Security: All PII anonymized, encrypted fields, ZKP commitments, audit trail to ledger
+// Resilience: Idempotent keys (nonces), CRDT-compatible timestamps, vector clocks for eventual consistency
+// Source of Truth: Database schema is the contract between all modules
+
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["fullTextSearch"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  // Enable extensions via SQL: CREATE EXTENSION IF NOT EXISTS timescaledb; CREATE EXTENSION IF NOT EXISTS pgcrypto;
+}
+
+// ============================================================================
+// AUTHENTICATION & IDENTITY (Zero-Trust Security Foundation)
+// ============================================================================
+
+/// User model: Anonymized identity with post-quantum keys for E2EE
+/// Security: UUID (no sequential IDs), publicKey unique, encrypted private key not stored
+model User {
+  id                    String   @id @default(uuid())
+  
+  // Post-quantum cryptography: Ed25519 for signatures (256-bit security, quantum-resistant)
+  publicKeyEd25519      String   @unique  // Hex-encoded Ed25519 public key (64 chars)
+  
+  // Post-quantum encryption: Kyber (future roadmap; currently using XChaCha20-Poly1305)
+  kyberPublicKey        String?  // Optional: Kyber-768 for key encapsulation (future)
+  
+  // Authorization: Role-based access control (RBAC)
+  role                  UserRole @default(USER)
+  
+  // Federated Learning Linkage: Anonymized device ID for federated aggregation without revealing device
+  federatedDeviceHash   String?  // keccak256(deviceId) for privacy-preserving federated learning
+  
+  // Privacy: No emails, names, or PII stored; only anonymized IDs
+  // Tracking: Vector clock for CRDT-based eventual consistency in disaster scenarios
+  vectorClock           Int      @default(0)  // Lamport clock for distributed ordering
+  
+  // Lifecycle
+  status                UserStatus @default(ACTIVE)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  deletedAt             DateTime?  // Soft delete for GDPR
+
+  // Relations
+  alerts                Alert[]
+  federatedUpdates      FederatedUpdate[]
+  zkProofs              ZkProof[]
+  networkVerifications  NetworkVerification[]
+  auditEvents           AuditEvent[]
+
+  @@index([publicKeyEd25519])  // Fast verification lookups
+  @@index([federatedDeviceHash])  // Federated aggregation batching
+  @@index([role])  // RBAC filtering
+  @@index([status])  // Active user queries
+  @@map("users")
+}
+
+enum UserRole {
+  USER         /// Regular user: can send alerts, receive translations
+  RESPONDER    /// Emergency responder: verifies hazards, broadcasts alerts
+  ADMIN        /// Administrator: system-wide permissions
+  SYSTEM       /// Service account: internal automation
+}
+
+enum UserStatus {
+  ACTIVE      /// User can participate
+  DORMANT     /// Historical data only
+  SUSPENDED   /// Flagged by admin or auto-suspended (fraud)
+  DELETED     /// GDPR deletion (anonymized)
+}
+
+// ============================================================================
+// ALERTS & BROADCASTING (Resilience + Geofenced Urgency)
+// ============================================================================
+
+/// Alert model: Geofenced emergency broadcast with ZKP authenticity
+/// Resilience: Nonce for idempotency, timestamp for CRDT, ledgerTxId for audit immutability
+/// Privacy: No content stored, only ZKP commitment + translation link
+model Alert {
+  id                  String   @id @default(uuid())
+  
+  // Ownership & Verification
+  userId              String
+  
+  // Idempotency: Nonce prevents replay attacks (same nonce within 5min window rejected)
+  nonce               String   @unique  // Generate: base64(3 random bytes + timestamp)
+  
+  // References: Links to hazard, translation, and cryptographic proof
+  hazardId            String?
+  translationId       String?
+  zkProofId           String?  // ZKP proving alert authenticity without revealing content
+  
+  // Geofenced Broadcasting: PostGIS geometry for spatial queries
+  geolocation         Json?    // Encrypted JSON: {lat: number, lon: number, alt?: number, accuracy?: number}
+                                // Stored encrypted with XChaCha20-Poly1305; decrypt only for geofence queries
+  
+  // Urgency Semantics: Prosody-aware translation ensuring panic preservation
+  urgencyLevel        Int      @default(5)  // [1-10] scale; preserved across translations via CoT
+  
+  // Status Tracking: Eventual consistency via CRDT
+  status              AlertStatus @default(PENDING)
+  broadcastedAt       DateTime?
+  resolvedAt          DateTime?
+  
+  // Timestamp for TimescaleDB hypertable (time-series analysis)
+  timestamp           DateTime @default(now())
+  
+  // Immutable Audit Trail: Link to Hyperledger Fabric transaction ID
+  ledgerTxId          String?  // Reference to fabric txn for non-repudiation
+  ledgerLoggedAt      DateTime?
+  
+  // Resilience: Vector clock for CRDT-style eventual consistency across regions
+  vectorClock         Int      @default(0)
+
+  // Relations
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hazard              Hazard?  @relation(fields: [hazardId], references: [id])
+  translation         Translation? @relation(fields: [translationId], references: [id])
+  zkProof             ZkProof? @relation(fields: [zkProofId], references: [id])
+
+  @@unique([nonce])  // Prevent replay
+  @@index([timestamp(desc)])  // TimescaleDB ordering
+  @@index([userId, status])  // User alert queries
+  @@index([hazardId])  // Hazard link traversal
+  @@index([ledgerTxId])  // Audit trail lookups
+  @@fulltext([urgencyLevel])  // Full-text search on urgency
+  @@map("alerts")
+}
+
+enum AlertStatus {
+  PENDING       /// Created, awaiting broadcast
+  BROADCASTED   /// Sent to geofence
+  ACKNOWLEDGED  /// Responder acknowledged
+  RESOLVED      /// Hazard resolved
+  ARCHIVED      /// Historical
+}
+
+// ============================================================================
+// HAZARD INTELLIGENCE (Bayesian Fusion + Public API Ingestion)
+// ============================================================================
+
+/// Hazard model: Fused probabilistic hazard with differential privacy
+/// Resilience: Stores multimodal fusion results with noise injection
+/// Privacy: No raw source data; only fused probabilities + anonymized results
+model Hazard {
+  id                String   @id @default(uuid())
+  
+  // Source Tracking: Which APIs contributed to this fusion
+  sourceApis        String   // CSV: "NOAA,USGS,Sentinel"
+  
+  // Hazard Classification
+  type              HazardType
+  
+  // Bayesian Probability: P(hazard | observations) from Bayesian network
+  // Quantifies uncertainty in chaos scenarios
+  probability       Float    // [0.0-1.0] posterior probability
+  
+  // Geospatial Coverage: Polygon JSON for fused hazard extent
+  // Encrypted at rest; decrypted for PostGIS ST_Intersects queries
+  geofence          Json     // GeoJSON Polygon: {type: "Polygon", coordinates: [...]}
+  
+  // Multimodal Fusion Results: All sensory data aggregated
+  // With differential privacy noise (DP-epsilon budget: 0.1-1.0)
+  fusedData         Json?    // Encrypted: {sensorA: {...}, sensorB: {...}, noise: {...}}
+  
+  // Differential Privacy: Noise added to protect individual sensors
+  // Mechanism: Laplace noise proportional to sensitivity
+  dpEpsilon         Float    @default(0.5)  // Privacy budget (lower = more noise = less utility)
+  dpDelta           Float    @default(0.0001)  // Failure probability bound
+  
+  // Timestamp for time-series analysis (TimescaleDB hypertable)
+  timestamp         DateTime @default(now())
+  expiresAt         DateTime?  // Hazard relevance window
+  
+  // Confidence: How many sources agree?
+  sourceCount       Int      @default(1)  // Number of APIs in fusion
+  confidenceScore   Float    @default(0.5)  // [0-1] aggregated confidence
+
+  // Relations
+  alerts            Alert[]
+
+  @@index([timestamp(desc)])  // TimescaleDB: CREATE HYPERTABLE 'hazards' ON 'timestamp'
+  @@index([type])  // Filter by hazard type
+  @@index([probability(desc)])  // High-risk queries
+  @@map("hazards")
+}
+
+enum HazardType {
+  FLOOD       /// Water-based
+  EARTHQUAKE  /// Seismic
+  WILDFIRE    /// Fire
+  POLLUTION   /// Air/water quality
+  PANDEMIC    /// Health emergency
+  INFRASTRUCTURE  /// Building collapse, utility failure
+  OTHER       /// Unclassified
+}
+
+// ============================================================================
+// TRANSLATION & MULTILINGUAL URGENCY (Federated LLMs + ZKP Fidelity)
+// ============================================================================
+
+/// Translation model: Stores fidelity proof without source/target text
+/// Privacy: No content stored; only ZKP commitment of translation accuracy
+/// Resilience: Federated fine-tuning aggregates models without revealing data
+model Translation {
+  id                  String   @id @default(uuid())
+  
+  // Language Pair
+  sourceLang          String   // ISO 639-1: "en", "es", etc.
+  targetLang          String
+  
+  // Urgency Preservation: CoT reasoning ensures panic-level semantics
+  // [0-1]: 0=neutral, 1=extreme urgency preserved
+  prosodyScore        Float    @default(0.85)  // Semantic preservation metric
+  
+  // ZK Proof of Fidelity: Proves translation accuracy without revealing text
+  zkFidelityProofId   String?  // References ZkProof with proofType=TRANSLATION_FIDELITY
+  
+  // Federated Learning: Which model version was used?
+  federatedRound      Int?     // Flower aggregation round number
+  modelHash           String?  // SHA256 of model weights for versioning
+  
+  // Timestamp
+  timestamp           DateTime @default(now())
+
+  // Relations
+  alerts              Alert[]
+
+  @@index([sourceLang, targetLang])  // Language pair queries
+  @@index([federatedRound])  // Model version tracking
+  @@map("translations")
+}
+
+// ============================================================================
+// ZERO-KNOWLEDGE PROOFS (Authenticity + Privacy Without Reveal)
+// ============================================================================
+
+/// ZkProof model: Stores cryptographic proofs for verification without data leakage
+/// Privacy: Proofs are non-interactive zk-SNARKs (snarkjs); no content revealed
+/// Security: Commitment prevents proof tampering
+model ZkProof {
+  id                String   @id @default(uuid())
+  
+  // Ownership
+  userId            String
+  
+  // Proof Type: What is being proven?
+  proofType         ProofType
+  
+  // Commitment: Hash of proof parameters (prevents tampering)
+  // commitment = keccak256(circuit_commitment || input_commitment || timestamp)
+  commitment        String   @unique
+  
+  // Stored Proof: Full proof JSON from snarkjs
+  // Format: { pi_a: [...], pi_b: [...], pi_c: [...], protocol: "groth16", curve: "bn128" }
+  proofJson         Json
+  
+  // Verification Status: When was this proof verified?
+  verifiedAt        DateTime?
+  verifier          String?   // Which service verified? (anti-fragmentation)
+  
+  // Timestamp
+  timestamp         DateTime @default(now())
+
+  // Relations
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  alerts            Alert[]
+
+  @@index([commitment])  // Proof lookup
+  @@index([proofType])  // Filter by proof type
+  @@index([verifiedAt])  // Unverified proofs (pending)
+  @@map("zk_proofs")
+}
+
+enum ProofType {
+  TRANSLATION_FIDELITY    /// Proves CoT preserved urgency without revealing text
+  ALERT_AUTHENTICITY      /// Proves alert creator identity without revealing signing key
+  NETWORK_VERIFICATION    /// Proves responder legitimacy in network
+}
+
+// ============================================================================
+// FEDERATED LEARNING (Privacy-Preserving Model Training)
+// ============================================================================
+
+/// FederatedUpdate model: Encrypted model weight deltas from edge devices
+/// Privacy: Only aggregated weights transmitted; differential privacy noise added
+/// Resilience: Updates idempotent via nonce; aggregation tolerates stragglers
+model FederatedUpdate {
+  id                String   @id @default(uuid())
+  
+  // Client Identity: Which device sent this update?
+  userId            String
+  
+  // Model Type: What's being trained?
+  modelType         String   // e.g., "translation-adapter", "voice-stress-detector"
+  
+  // Weight Delta: Encrypted model gradient (parameter updates)
+  // Encrypted with XChaCha20-Poly1305; decrypted only during aggregation
+  updateDelta       Json     // {layer1_delta: [...], layer2_delta: [...]}
+  
+  // Differential Privacy: Noise added BEFORE encryption to bounds sensitivity
+  // Mechanism: Gaussian noise ~ N(0, sigma^2) where sigma depends on dp_epsilon
+  dpClipping        Float    @default(1.0)  // L2-norm clipping threshold
+  dpNoise           Json?    // {mean: 0, std: {...}} noise parameters
+  
+  // Aggregation Coordination: Flower-compatible round ID
+  aggregationRound  Int      // Round number for batching
+  
+  // Idempotency: Prevent double-counting if update retried
+  nonce             String   @unique  // base64(random || timestamp)
+  
+  // Timestamp
+  timestamp         DateTime @default(now())
+
+  // Relations
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([aggregationRound, modelType])  // Batch aggregation queries
+  @@index([nonce])  // Idempotency checks
+  @@map("federated_updates")
+}
+
+// ============================================================================
+// NETWORK VERIFICATION (Responder Authentication + Trust)
+// ============================================================================
+
+/// NetworkVerification model: ZKP-based verification of emergency responders
+/// Resilience: Decentralized trust via proof chains (A verifies B, B verifies C)
+model NetworkVerification {
+  id                String   @id @default(uuid())
+  
+  // Verifier: Who's verifying?
+  verifierId        String
+  
+  // Subject: Who's being verified?
+  subjectId         String
+  
+  // Verification Type: What credential is proven?
+  credentialType    String   // e.g., "FirstResponder", "MedicalPersonnel"
+  
+  // ZK Proof: Non-interactive proof of credential possession
+  zkProofId         String?
+  
+  // Trust Chain: Transitivity for decentralized trust
+  // verifiedByChain: [A→B, B→C] means B verified by A, C verified by B
+  verifiedByChain   Json?    // [{verifierId: "...", timestamp: ...}, ...]
+  
+  // Status: Verification state
+  status            VerificationStatus @default(PENDING)
+  
+  // Expiry: Credentials expire to force re-verification
+  expiresAt         DateTime
+  
+  // Timestamp
+  timestamp         DateTime @default(now())
+
+  // Relations
+  verifier          User     @relation(fields: [verifierId], references: [id])
+  subject           User     @relation("verified", fields: [subjectId], references: [id])
+
+  @@index([subjectId, status])  // Verification status queries
+  @@index([expiresAt])  // Expiry checks
+  @@map("network_verifications")
+}
+
+enum VerificationStatus {
+  PENDING     /// Awaiting proof submission
+  VERIFIED    /// Proof accepted
+  REVOKED     /// Credential revoked
+  EXPIRED     /// Expired
+}
+
+// ============================================================================
+// AUDIT & LEDGER (Immutable + Non-Repudiation)
+// ============================================================================
+
+/// AuditEvent model: Immutable log of all user actions
+/// Resilience: Hash-chained (H(event_n) = sha256(event_n-1 || data_n))
+/// Ledger: Periodically archived to Hyperledger Fabric for byzantine resistance
+model AuditEvent {
+  id                String   @id @default(uuid())
+  
+  // Actor
+  userId            String
+  
+  // Action: What happened?
+  action            String   // e.g., "ALERT_CREATED", "ZK_PROOF_VERIFIED"
+  
+  // Resource Affected
+  resourceType      String   // e.g., "Alert", "Hazard", "User"
+  resourceId        String
+  
+  // Details: What changed?
+  details           Json?    // {prev: {...}, curr: {...}}
+  
+  // Hash Chain: Immutability
+  // SHA256(prevHash || userId || action || resourceId || timestamp)
+  hash              String   @unique
+  prevHash          String?  // Reference to previous event for chain integrity
+  
+  // Ledger Integration: Archived to Fabric?
+  ledgerTxId        String?  // Hyperledger Fabric transaction ID
+  ledgerLoggedAt    DateTime?
+  
+  // Timestamp
+  timestamp         DateTime @default(now())
+
+  // Relations
+  user              User     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, timestamp(desc)])  // User action history
+  @@index([resourceType, resourceId])  // Resource change history
+  @@index([hash])  // Chain integrity verification
+  @@index([ledgerTxId])  // Ledger batch lookups
+  @@map("audit_events")
+}
+
+// ============================================================================
+// ENHANCED INDEXES & CONSTRAINTS (Performance + Consistency)
+// ============================================================================
+// Note: TimescaleDB-specific setup (run after migration):
+//   SELECT create_hypertable('hazards', 'timestamp', if_not_exists => TRUE);
+//   CREATE INDEX ON hazards USING GIST(geofence);
+//
+// PostGIS for geospatial:
+//   ALTER TABLE alerts ADD COLUMN geom GEOMETRY;
+//   CREATE INDEX ON alerts USING GIST(geom);
+//
+// Full-text search:
+//   CREATE INDEX ON hazards USING GIN(to_tsvector('english', type || ' ' || sourceApis));
